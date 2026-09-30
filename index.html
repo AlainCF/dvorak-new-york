@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dvořák à New York — carte interactive</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --bg:#f7f5f1;
+    --panel:#ffffff;
+    --ink:#26231f;
+    --ink-soft:#5c574f;
+    --line:#e4ded3;
+    --accent:#8a4a2f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1b1815;
+      --panel:#252119;
+      --ink:#f2ede3;
+      --ink-soft:#c4bcae;
+      --line:#3a352c;
+      --accent:#d68a5f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1b1815;
+    --panel:#252119;
+    --ink:#f2ede3;
+    --ink-soft:#c4bcae;
+    --line:#3a352c;
+    --accent:#d68a5f;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:"Georgia","Iowan Old Style",serif;
+    background:var(--bg);
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+  }
+  header{
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  header h1{
+    font-size:1.25rem;
+    margin:0;
+    font-weight:600;
+    letter-spacing:.2px;
+  }
+  header p{
+    margin:0;
+    font-size:.85rem;
+    color:var(--ink-soft);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  #app{
+    flex:1;
+    display:flex;
+    min-height:0;
+  }
+  #sidebar{
+    width:340px;
+    max-width:42vw;
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  #filters{
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  #filters .chip-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .chip{
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:4px 10px;
+    font-size:.72rem;
+    cursor:pointer;
+    background:transparent;
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    gap:5px;
+    user-select:none;
+  }
+  .chip .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .chip.off{opacity:.35;}
+  #list{
+    flex:1;
+    overflow-y:auto;
+    padding:4px 0 16px;
+  }
+  .place-item{
+    padding:9px 14px;
+    border-bottom:1px solid var(--line);
+    cursor:pointer;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  .place-item:hover{background:rgba(138,74,47,.08);}
+  .place-item.active{background:rgba(138,74,47,.14);}
+  .place-item .pi-top{
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+  .pi-num{
+    flex:none;
+    width:18px;height:18px;
+    border-radius:50%;
+    color:#fff;
+    font-size:.62rem;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .pi-dot{
+    flex:none;
+    width:9px;height:9px;
+    border-radius:50%;
+  }
+  .pi-name{font-size:.86rem;font-weight:600;line-height:1.25;}
+  .pi-date{
+    font-size:.72rem;
+    color:var(--ink-soft);
+    margin-top:2px;
+    padding-left:25px;
+  }
+  #map{flex:1;min-height:0;}
+  .leaflet-popup-content-wrapper{
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:8px;
+  }
+  .leaflet-popup-tip{background:var(--panel);}
+  .popup-title{font-family:Georgia,serif;font-weight:700;font-size:.95rem;margin:0 0 2px;}
+  .popup-addr{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:.72rem;color:var(--ink-soft);margin:0 0 6px;}
+  .popup-date{
+    display:inline-block;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:.7rem;
+    font-weight:600;
+    color:var(--accent);
+    margin:0 0 6px;
+  }
+  .popup-desc{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:.82rem;line-height:1.45;margin:0;max-width:260px;}
+  .num-icon{
+    border-radius:50%;
+    color:#fff;
+    font-size:.68rem;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:24px;height:24px;
+    border:2px solid rgba(255,255,255,.85);
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+  }
+  .dot-icon{
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,.85);
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+    width:14px;height:14px;
+  }
+  #mobileToggle{
+    display:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:.8rem;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:6px;
+    padding:5px 10px;
+    cursor:pointer;
+  }
+  #langSwitch{
+    margin-left:auto;
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:999px;
+    overflow:hidden;
+    flex:none;
+  }
+  .lang-btn{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:.72rem;
+    font-weight:700;
+    letter-spacing:.4px;
+    border:none;
+    background:transparent;
+    color:var(--ink-soft);
+    padding:5px 12px;
+    cursor:pointer;
+  }
+  .lang-btn.active{
+    background:var(--accent);
+    color:#fff;
+  }
+  @media (max-width:720px){
+    #mobileToggle{display:inline-block;}
+    #app{position:relative;}
+    #sidebar{
+      position:absolute;
+      z-index:1000;
+      top:0;left:0;bottom:0;
+      width:82vw;
+      max-width:340px;
+      transform:translateX(-100%);
+      transition:transform .2s ease;
+      box-shadow:2px 0 14px rgba(0,0,0,.25);
+    }
+    #sidebar.open{transform:translateX(0);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="pageTitle">Dvořák à New York</h1>
+  <p id="pageSubtitle">Lieux fréquentés par Antonín Dvořák à New York et ses environs, 1892–1895</p>
+  <div id="langSwitch" role="group" aria-label="Language">
+    <button type="button" class="lang-btn active" data-lang="fr">FR</button>
+    <button type="button" class="lang-btn" data-lang="en">EN</button>
+  </div>
+  <button id="mobileToggle" type="button">☰ Lieux</button>
+</header>
+
+<div id="app">
+  <aside id="sidebar">
+    <div id="filters">
+      <div class="chip-row" id="chipRow"></div>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DATA = {"places": [{"id": "statue-liberty", "num": 20, "cat": "travel", "fr_name": "Vue de la statue de la Liberté (depuis Sandy Hook)", "en_name": "View of the Statue of Liberty (from Sandy Hook)", "fr_address": "Baie de New York, près de Sandy Hook", "en_address": "New York Harbor, near Sandy Hook", "lat": 40.4977, "lng": -74.0057, "fr_dates": "26 sept. 1892", "en_dates": "Sept. 26, 1892", "fr_desc": "En approchant de New York par la baie, à bord du <i>Saale</i>, Dvořák aperçoit pour la première fois la statue de la Liberté depuis les environs de Sandy Hook.", "en_desc": "Approaching New York across the bay aboard the <i>Saale</i>, Dvořák catches his first sight of the Statue of Liberty near Sandy Hook."}, {"id": "quarantine", "num": null, "cat": "travel", "fr_name": "Mouillage en quarantaine", "en_name": "Quarantine anchorage", "fr_address": "Au large de Staten Island", "en_address": "Off Staten Island", "lat": 40.573, "lng": -74.053, "fr_dates": "26 sept. 1892", "en_dates": "Sept. 26, 1892", "fr_desc": "Le navire jette l'ancre près de Staten Island pour la visite sanitaire de quarantaine, avant de pouvoir accoster.", "en_desc": "The ship anchors near Staten Island for the sanitary quarantine inspection before it is allowed to dock."}, {"id": "ellis-island", "num": 18, "cat": "travel", "fr_name": "Ellis Island", "en_name": "Ellis Island", "fr_address": "Ellis Island, New York Harbor", "en_address": "Ellis Island, New York Harbor", "lat": 40.6995, "lng": -74.0396, "fr_dates": "27 sept. 1892", "en_dates": "Sept. 27, 1892", "fr_desc": "Passage par Ellis Island à l'arrivée aux États-Unis.", "en_desc": "Passage through Ellis Island on arrival in the United States."}, {"id": "hoboken", "num": 9, "cat": "travel", "fr_name": "Hoboken (arrivées et départs)", "en_name": "Hoboken (arrivals and departures)", "fr_address": "Hoboken, New Jersey", "en_address": "Hoboken, New Jersey", "lat": 40.7357, "lng": -74.0279, "fr_dates": "27 sept. 1892 (arrivée) · 26 oct. 1894 (arrivée) · 16 avr. 1895 (départ)", "en_dates": "Sept. 27, 1892 (arrival) · Oct. 26, 1894 (arrival) · Apr. 16, 1895 (departure)", "fr_desc": "Dvořák débarque à Hoboken le 27 septembre 1892 puis rejoint Manhattan le jour même. Hoboken sera aussi son point d'arrivée le 26 octobre 1894 et son point de départ le 16 avril 1895. Son point de départ du 19 mai 1894 reste inconnu.", "en_desc": "Dvořák lands at Hoboken on September 27, 1892 and proceeds to Manhattan the same day. Hoboken will also be his point of arrival on October 26, 1894 and his point of departure on April 16, 1895. His point of departure on May 19, 1894 is unknown."}, {"id": "clarendon-hotel", "num": null, "cat": "residence", "fr_name": "Clarendon Hotel", "en_name": "Clarendon Hotel", "fr_address": "Angle sud-est de East 18th St. et Park Avenue South, Manhattan", "en_address": "Southeast corner of East 18th St. and Park Avenue South, Manhattan", "lat": 40.7376, "lng": -73.9879, "fr_dates": "27 sept. – vers le 18 oct. 1892", "en_dates": "Sept. 27 – ca. Oct. 18, 1892", "fr_desc": "Logement temporaire de la famille Dvořák à son arrivée, avant l'emménagement au 327 East 17th Street. (À ne pas confondre avec le Clarendon Hotel de Brooklyn.) Démoli en 1909 ou peu après.", "en_desc": "Temporary lodging for the Dvořák family on arrival, before moving to 327 East 17th Street. (Not to be confused with the Clarendon Hotel in Brooklyn.) Demolished in 1909 or shortly after."}, {"id": "perpetual-help", "num": null, "cat": "social", "fr_name": "Church of Our Lady of Perpetual Help (« l'église bohémienne »)", "en_name": "Church of Our Lady of Perpetual Help (the ‘Bohemian church’)", "fr_address": "321 East 61st Street, Manhattan", "en_address": "321 East 61st Street, Manhattan", "lat": 40.7605, "lng": -73.96, "fr_dates": "sept.–oct. 1892 · 14 avr. 1894", "en_dates": "Sept.–Oct. 1892 · Apr. 14, 1894", "fr_desc": "Très probablement l'« église bohémienne » que James Huneker fait découvrir à Dvořák peu après son arrivée. C'est aussi là que, le 14 avril 1894, la famille assiste à un requiem pour le père du compositeur, récemment décédé. Église démolie vers 1998.", "en_desc": "Most likely the ‘Bohemian church’ that James Huneker introduces Dvořák to shortly after his arrival. It is also here that, on April 14, 1894, the family attends a requiem for the composer's father, who had just died. Demolished circa 1998."}, {"id": "goerlitz", "num": null, "cat": "leisure", "fr_name": "Brasserie de Goerlitz", "en_name": "Goerlitz's beer hall", "fr_address": "143 East 17th Street, Manhattan", "en_address": "143 East 17th Street, Manhattan", "lat": 40.7345, "lng": -73.986, "fr_dates": "28 sept. – 9 oct. 1892", "en_dates": "Sept. 28 – Oct. 9, 1892", "fr_desc": "Lieu visité avec James Huneker au début du séjour new-yorkais. À l'angle, au 190 Third Avenue, se trouve le bâtiment que Goerlitz acquiert en 1894 pour y installer sa nouvelle brasserie ; Dvořák a pu le fréquenter aussi, sans confirmation.", "en_desc": "Visited with James Huneker early in the New York stay. Around the corner, at 190 Third Avenue, stands the building Goerlitz acquired in 1894 for his new beer hall; Dvořák may have visited that one too, though this is unconfirmed."}, {"id": "luchows", "num": null, "cat": "leisure", "fr_name": "Restaurant Lüchow's", "en_name": "Lüchow's restaurant", "fr_address": "110 East 14th Street, à Irving Place (près d'Union Square), Manhattan", "en_address": "110 East 14th Street at Irving Place (near Union Square), Manhattan", "lat": 40.7343, "lng": -73.9878, "fr_dates": "28 sept. – 9 oct. 1892", "en_dates": "Sept. 28 – Oct. 9, 1892", "fr_desc": "Autre étape des sorties avec James Huneker. Démoli en 1995.", "en_desc": "Another stop on the outings with James Huneker. Demolished in 1995."}, {"id": "conservatory", "num": null, "cat": "social", "fr_name": "National Conservatory of Music of America", "en_name": "National Conservatory of Music of America", "fr_address": "126 & 128 East 17th Street, Manhattan", "en_address": "126 & 128 East 17th Street, Manhattan", "lat": 40.7346, "lng": -73.9855, "fr_dates": "1er oct. 1892", "en_dates": "Oct. 1, 1892", "fr_desc": "Dvořák y est accueilli officiellement comme directeur. Le conservatoire, dirigé par Jeannette Thurber, est à deux pas de son futur domicile. Bâtiment démoli vers 1910.", "en_desc": "Dvořák is formally welcomed here as director. The conservatory, run by Jeannette Thurber, is a short walk from his future home. Building demolished circa 1910."}, {"id": "novello", "num": null, "cat": "social", "fr_name": "Bureau new-yorkais de Novello", "en_name": "New York office of Novello", "fr_address": "21 East 17th Street (« trois portes à l'ouest de Broadway »), Manhattan", "en_address": "21 East 17th Street (‘three doors west of Broadway’), Manhattan", "lat": 40.7357, "lng": -73.9908, "fr_dates": "date précise inconnue", "en_dates": "exact date unknown", "fr_desc": "Bureau new-yorkais de Novello, l'éditeur londonien de Dvořák.", "en_desc": "New York office of Novello, Dvořák's London publisher."}, {"id": "turnverein", "num": 3, "cat": "concert", "fr_name": "Central Turn-Verein Opera House", "en_name": "Central Turn-Verein Opera House", "fr_address": "205 East 67th Street, Manhattan", "en_address": "205 East 67th Street, Manhattan", "lat": 40.7679, "lng": -73.9605, "fr_dates": "9 oct. 1892", "en_dates": "Oct. 9, 1892", "fr_desc": "Dvořák assiste au concert et au banquet donnés en son honneur par la communauté tchèque de New York (voir le New York Herald du 10 oct. 1892). Bâtiment aujourd'hui disparu.", "en_desc": "Dvořák attends the concert and banquet given in his honor by New York's Czech community (see the New York Herald of Oct. 10, 1892). Building no longer standing."}, {"id": "residence", "num": 13, "cat": "residence", "fr_name": "Résidence de Dvořák et son voisinage", "en_name": "Dvořák's residence and neighborhood", "fr_address": "327 East 17th Street (côté nord, entre 1st et 2nd Avenue), Manhattan", "en_address": "327 East 17th Street (north side, midway between 1st and 2nd Avenue), Manhattan", "lat": 40.7335, "lng": -73.98, "fr_dates": "vers le 18 oct. 1892 – avril 1895", "en_dates": "ca. Oct. 18, 1892 – April 1895", "fr_desc": "Domicile de la famille Dvořák pendant la quasi-totalité du séjour new-yorkais (avec des interruptions l'été). La maison, démolie en 1992, se trouvait à quelques pas du Conservatoire. Un fragment de sa cheminée est aujourd'hui conservé au Bohemian National Hall ; une statue de Dvořák se dresse depuis 1997 dans le Stuyvesant Square Park tout proche.", "en_desc": "Home of the Dvořák family for nearly all of the New York years (with summer breaks). The house, demolished in 1992, stood a short walk from the Conservatory. A salvaged mantelpiece fragment is preserved at the Bohemian National Hall; a statue of Dvořák has stood since 1997 in nearby Stuyvesant Square Park."}, {"id": "fleischmanns", "num": null, "cat": "social", "fr_name": "Café Fleischmann's", "en_name": "Fleischmann's Café", "fr_address": "Angle nord-est de Broadway et de la 10e rue, Manhattan", "en_address": "Northeast corner of Broadway and 10th Street, Manhattan", "lat": 40.7317, "lng": -73.9912, "fr_dates": "à partir d'oct. 1892 environ", "en_dates": "from ca. Oct. 1892", "fr_desc": "Dvořák y retrouve fréquemment le chef d'orchestre Anton Seidl. C'est probablement là que Seidl lui demande la permission de créer la Symphonie « du Nouveau Monde », et qu'il confie à Josef Kovařík, en aparté, que la symphonie est « purement de la musique indienne ».", "en_desc": "Dvořák meets frequently here with conductor Anton Seidl. It was likely here that Seidl asked permission to premiere the ‘New World’ Symphony, and later remarked privately to Josef Kovařík that the symphony was ‘purely Indian music.’"}, {"id": "grand-central", "num": 7, "cat": "leisure", "fr_name": "Grand Central Station (ancienne gare)", "en_name": "Grand Central Station (former depot)", "fr_address": "42nd Street et Park Avenue, Manhattan", "en_address": "42nd Street and Park Avenue, Manhattan", "lat": 40.7527, "lng": -73.9772, "fr_dates": "à partir d'oct. 1892 environ", "en_dates": "from ca. Oct. 1892", "fr_desc": "Selon Josef Kovařík, la toute première chose que Dvořák a voulu voir en arrivant à New York fut une grande locomotive express. Les employés refusent toutefois de le laisser approcher des trains.", "en_desc": "According to Josef Kovařík, the very first thing Dvořák wanted to see on reaching New York was one of the big express locomotives. The gatemen, however, refused to let him near the trains."}, {"id": "155th-street", "num": 1, "cat": "leisure", "fr_name": "155e rue / Washington Heights", "en_name": "155th Street / Washington Heights", "fr_address": "155th Street, à l'extrémité nord du métro aérien (« L ») de la Sixth Avenue, Manhattan", "en_address": "155th Street, at the north end of the Sixth Avenue elevated line (‘L’), Manhattan", "lat": 40.8306, "lng": -73.942, "fr_dates": "à partir de fin 1892, deux à trois fois par semaine", "en_dates": "from late 1892, two or three times a week", "fr_desc": "N'ayant pu approcher les trains en gare, Dvořák prend l'habitude de monter jusqu'à la 155e rue en métro aérien pour observer, depuis les hauteurs de Washington Heights, le passage des express de Chicago et de Boston.", "en_desc": "Unable to get near the trains at the depot, Dvořák takes to riding the elevated line up to 155th Street to watch, from the heights of Washington Heights, the Chicago and Boston express trains speed by."}, {"id": "carnegie-hall", "num": 5, "cat": "concert", "fr_name": "Carnegie Hall", "en_name": "Carnegie Hall", "fr_address": "152 West 57th Street (angle sud-est avec la 7e Avenue), Manhattan", "en_address": "152 West 57th Street (southeast corner with 7th Avenue), Manhattan", "lat": 40.7651, "lng": -73.9799, "fr_dates": "21 oct. 1892 · 16–17 déc. 1892 · 6 avr. 1893 · 16 déc. 1893 · 12 janv. 1894 · 7 déc. 1894", "en_dates": "Oct. 21, 1892 · Dec. 16–17, 1892 · Apr. 6, 1893 · Dec. 16, 1893 · Jan. 12, 1894 · Dec. 7, 1894", "fr_desc": "Salle inaugurée en 1891, toujours en activité aujourd'hui. Dvořák y dirige notamment la création mondiale du Te Deum (21 oct. 1892), la Sixième Symphonie (déc. 1892), l'ouverture Hussite (avr. 1893), et assiste le 16 décembre 1893 à la création officielle de la Neuvième Symphonie « du Nouveau Monde ».", "en_desc": "Opened in 1891 and still in use today. Dvořák conducts the world premiere of the Te Deum here (Oct. 21, 1892), the Sixth Symphony (Dec. 1892) and the Hussite Overture (Apr. 1893), and on December 16, 1893 attends the official premiere of the ‘New World’ Symphony."}, {"id": "central-park-zoo", "num": 4, "cat": "leisure", "fr_name": "Central Park Zoo", "en_name": "Central Park Zoo", "fr_address": "Central Park, entre les 62e et 66e rues, côté est, Manhattan", "en_address": "Central Park, between 62nd and 66th Streets, east side, Manhattan", "lat": 40.7678, "lng": -73.9718, "fr_dates": "à partir de nov. 1892 environ", "en_dates": "from ca. Nov. 1892", "fr_desc": "Avec Josef Kovařík, Dvořák aime observer longuement la volière aux pigeons du petit zoo, bien qu'il juge ses propres pigeons d'élevage bien supérieurs. Le zoo, ouvert sur ce site en 1861, existe toujours.", "en_desc": "With Josef Kovařík, Dvořák enjoys watching the little zoo's pigeon cage at length, though he considers his own prize pigeons far superior. The zoo, opened on this site in 1861, still operates today."}, {"id": "east-river-piers", "num": 16, "cat": "leisure", "fr_name": "Quais de l'East River", "en_name": "East River piers", "fr_address": "Entre East 3rd St. et East 12th St., Manhattan", "en_address": "Between East 3rd St. and East 12th St., Manhattan", "lat": 40.7255, "lng": -73.975, "fr_dates": "à partir d'oct. 1892 environ", "en_dates": "from ca. Oct. 1892", "fr_desc": "Autre passion de Dvořák : observer les paquebots transatlantiques, monter à bord avant leur départ et discuter avec les capitaines. L'emplacement précis des quais fréquentés reste incertain.", "en_desc": "Another of Dvořák's passions: watching the transatlantic ocean liners, boarding them before sailing, and chatting with their captains. The exact piers involved remain uncertain."}, {"id": "battery-park", "num": 17, "cat": "leisure", "fr_name": "Battery Park", "en_name": "Battery Park", "fr_address": "Pointe sud de Manhattan", "en_address": "Southern tip of Manhattan", "lat": 40.7033, "lng": -74.017, "fr_dates": "à partir d'oct. 1892 environ", "en_dates": "from ca. Oct. 1892", "fr_desc": "Lorsque Dvořák et Kovařík n'arrivent pas à temps sur les quais, ils prennent le métro aérien de la Third Avenue jusqu'à South Ferry et regardent depuis Battery Park les paquebots s'éloigner dans la baie.", "en_desc": "When Dvořák and Kovařík could not make it to the pier in time, they took the Third Avenue elevated to South Ferry and watched from Battery Park as the liner made her way down the bay."}, {"id": "academy-brooklyn", "num": 19, "cat": "concert", "fr_name": "Academy of Music, Brooklyn", "en_name": "Academy of Music, Brooklyn", "fr_address": "176–194 Montague Street, Brooklyn", "en_address": "176–194 Montague Street, Brooklyn", "lat": 40.6944, "lng": -73.9928, "fr_dates": "4 ou 5 nov. 1892 · 11 janv. 1894 · 5 avr. 1894", "en_dates": "Nov. 4 or 5, 1892 · Jan. 11, 1894 · Apr. 5, 1894", "fr_desc": "Dvořák y entend le Boston Symphony Orchestra dirigé par Arthur Nikisch, puis y assiste à deux reprises à des concerts de la Seidl Society dirigés par Anton Seidl (dont sa Neuvième Symphonie). Bâtiment d'origine détruit par un incendie en 1903 ; localisation différente aujourd'hui.", "en_desc": "Dvořák hears the Boston Symphony Orchestra under Arthur Nikisch, and later attends two Seidl Society concerts conducted by Anton Seidl (including his Ninth Symphony). The original building burned down in 1903; today's Academy stands elsewhere."}, {"id": "buffalo-bill", "num": 21, "cat": "leisure", "fr_name": "Wild West Show de Buffalo Bill", "en_name": "Buffalo Bill's Wild West Show", "fr_address": "Third Avenue et 37th Street, Brooklyn (près de l'actuel Sunset Park)", "en_address": "Third Avenue and 37th Street, Brooklyn (near today's Sunset Park)", "lat": 40.6555, "lng": -74.0035, "fr_dates": "12–16 mai 1894", "en_dates": "May 12–16, 1894", "fr_desc": "Dvořák assiste au spectacle de Buffalo Bill sur les rives de l'Upper New York Harbor, à environ 5 km au sud du pont de Brooklyn.", "en_desc": "Dvořák sees Buffalo Bill's Wild West show on the shores of Upper New York Harbor, about 5 km (3 miles) south of the Brooklyn Bridge."}, {"id": "spiess-studio", "num": null, "cat": "social", "fr_name": "Studio du photographe William Spiess", "en_name": "Photographer William Spiess's studio", "fr_address": "43 Third Avenue, Manhattan", "en_address": "43 Third Avenue, Manhattan", "lat": 40.7296, "lng": -73.9895, "fr_dates": "avant le 1er mars 1893", "en_dates": "before March 1, 1893", "fr_desc": "Studio où fut probablement prise la photographie de Dvořák dédicacée le 1er mars 1893 à Adele Margulies — la plus ancienne connue associée à ce portrait.", "en_desc": "Studio where the Dvořák photograph inscribed to Adele Margulies on March 1, 1893 was most likely taken — the earliest known date associated with this portrait."}, {"id": "madison-square-garden", "num": 12, "cat": "concert", "fr_name": "Madison Square Garden (salle de concert de 1890)", "en_name": "Madison Square Garden Concert Hall (1890)", "fr_address": "26th Street et Madison Avenue, Manhattan", "en_address": "26th Street and Madison Avenue, Manhattan", "lat": 40.7419, "lng": -73.9877, "fr_dates": "30 mars 1893 · 23 janv. 1894", "en_dates": "Mar. 30, 1893 · Jan. 23, 1894", "fr_desc": "Dvořák y dirige le 30 mars 1893 le concerto pour piano primé de Joshua Phippen, puis, le 23 janvier 1894, un concert de charité incluant sa propre orchestration de Old Folks at Home de Stephen Foster, avec Sissieretta Jones et Harry T. Burleigh. Salle ouverte en 1890, démolie en 1925 ; le New York Life Building s'y dresse aujourd'hui.", "en_desc": "On March 30, 1893 Dvořák conducts Joshua Phippen's prize-winning piano concerto here, and on January 23, 1894 a charity concert including his own arrangement of Stephen Foster's Old Folks at Home, with Sissieretta Jones and Harry T. Burleigh. Opened in 1890, demolished in 1925; the New York Life Building now stands on the site."}, {"id": "scottish-rite", "num": 10, "cat": "concert", "fr_name": "Scottish Rite Hall", "en_name": "Scottish Rite Hall", "fr_address": "Angle sud-ouest de Madison Avenue et de la 29e rue, Manhattan", "en_address": "Southwest corner of Madison Avenue and 29th Street, Manhattan", "lat": 40.7454, "lng": -73.9873, "fr_dates": "4 déc. 1893", "en_dates": "Dec. 4, 1893", "fr_desc": "Concert orchestral des élèves du National Conservatory ; Dvořák y dirige notamment Beethoven. Bâtiment démoli en 1901.", "en_desc": "Orchestral concert of National Conservatory pupils; Dvořák conducts Beethoven, among others. Building demolished in 1901."}, {"id": "met-opera", "num": 8, "cat": "concert", "fr_name": "Metropolitan Opera House (ancien bâtiment)", "en_name": "Metropolitan Opera House (former building)", "fr_address": "1411 Broadway, entre la 7e Avenue et Broadway, 39th Street, Manhattan", "en_address": "1411 Broadway, between 7th Avenue and Broadway at 39th Street, Manhattan", "lat": 40.7524, "lng": -73.9877, "fr_dates": "12 janv. 1894 – 21 mars 1895", "en_dates": "Jan. 12, 1894 – Mar. 21, 1895", "fr_desc": "Dvořák y assiste à plusieurs représentations, notamment le Siegfried de Wagner (qu'il quitte après le premier acte) et le Semiramide de Rossini. Ouvert en 1883, démoli dans les années 1960.", "en_desc": "Dvořák attends several performances here, including Wagner's Siegfried (which he leaves after the first act) and Rossini's Semiramide. Opened in 1883, demolished in the 1960s."}, {"id": "st-georges", "num": null, "cat": "social", "fr_name": "St. George's Episcopal Church", "en_name": "St. George's Episcopal Church", "fr_address": "Stuyvesant Square, à environ 150 m à l'ouest du domicile de Dvořák", "en_address": "Stuyvesant Square, about 150 m (500 ft) west of Dvořák's home", "lat": 40.7334, "lng": -73.9834, "fr_dates": "à partir de févr. 1894 environ", "en_dates": "from ca. Feb. 1894", "fr_desc": "Harry Burleigh y devient soliste baryton. Rien ne prouve que Dvořák soit jamais entré dans cette église, mais c'est probable, vu la proximité avec son domicile.", "en_desc": "Harry Burleigh becomes baritone soloist here. There is no direct evidence Dvořák ever entered this church, but it seems likely given how close it stood to his home."}, {"id": "holy-trinity", "num": 6, "cat": "concert", "fr_name": "Church of the Holy Trinity", "en_name": "Church of the Holy Trinity", "fr_address": "Angle nord-est de Madison Avenue et de la 42e rue, Manhattan", "en_address": "Northeast corner of Madison Avenue and 42nd Street, Manhattan", "lat": 40.7527, "lng": -73.9787, "fr_dates": "11 avr. 1894", "en_dates": "Apr. 11, 1894", "fr_desc": "Dvořák y assiste à l'exécution de sa Messe en ré majeur. Bâtiment démoli dès 1895.", "en_desc": "Dvořák attends a performance of his Mass in D here. Building demolished as early as 1895."}, {"id": "madison-hall", "num": 2, "cat": "concert", "fr_name": "Madison Hall", "en_name": "Madison Hall", "fr_address": "54 East 125th Street, Harlem, Manhattan", "en_address": "54 East 125th Street, Harlem, Manhattan", "lat": 40.8041, "lng": -73.9375, "fr_dates": "9 mai 1894", "en_dates": "May 9, 1894", "fr_desc": "Dvořák y dirige l'orchestre du Conservatoire dans la Symphonie no 94 « La Surprise » de Haydn, ainsi que probablement un air de Ponchielli, un concerto de J. S. Bach et l'ouverture Preciosa de Weber. Bâtiment toujours debout.", "en_desc": "Dvořák conducts the Conservatory orchestra in Haydn's ‘Surprise’ Symphony (No. 94), probably also an aria by Ponchielli, a J. S. Bach concerto, and Weber's Preciosa overture. Building still standing."}, {"id": "schirmer", "num": null, "cat": "social", "fr_name": "Éditeur de musique G. Schirmer", "en_name": "G. Schirmer music publishers", "fr_address": "35 Union Square, Manhattan", "en_address": "35 Union Square, Manhattan", "lat": 40.7357, "lng": -73.9905, "fr_dates": "probablement déc. 1894", "en_dates": "probably Dec. 1894", "fr_desc": "Dvořák s'y rend probablement au sujet de The American Flag.", "en_desc": "Dvořák probably visits regarding The American Flag."}, {"id": "tesla-lab", "num": 14, "cat": "social", "fr_name": "Laboratoire de Nikola Tesla", "en_name": "Nikola Tesla's laboratory", "fr_address": "Côté nord du croisement de LaGuardia Place et Bleecker Street, Manhattan", "en_address": "North side of the intersection of LaGuardia Place and Bleecker Street, Manhattan", "lat": 40.7284, "lng": -73.9985, "fr_dates": "22 déc. 1894 (+ au moins deux autres visites, dates inconnues)", "en_dates": "Dec. 22, 1894 (+ at least two further visits, dates unknown)", "fr_desc": "Dvořák rend visite à l'ingénieur et inventeur Nikola Tesla, qu'il a rencontré chez Robert Underwood Johnson. Emplacement aujourd'hui disparu, sans plaque commémorative.", "en_desc": "Dvořák visits engineer and inventor Nikola Tesla, whom he met at Robert Underwood Johnson's home. Site no longer standing, no historical marker."}, {"id": "underwood-johnson", "num": null, "cat": "social", "fr_name": "Domicile de Robert Underwood Johnson", "en_name": "Robert Underwood Johnson's home", "fr_address": "327 Lexington Avenue (entre la 38e et la 39e rue), Manhattan", "en_address": "327 Lexington Avenue (between 38th and 39th Streets), Manhattan", "lat": 40.7495, "lng": -73.9773, "fr_dates": "date inconnue", "en_dates": "date unknown", "fr_desc": "Rédacteur du Century Magazine, Robert Underwood Johnson reçoit Dvořák chez lui — c'est là que le compositeur fait la connaissance de Nikola Tesla.", "en_desc": "Century Magazine editor Robert Underwood Johnson hosts Dvořák at his home — it is here that the composer makes Nikola Tesla's acquaintance."}, {"id": "thurber-residence", "num": 11, "cat": "social", "fr_name": "Résidence des Thurber", "en_name": "The Thurbers' residence", "fr_address": "49 West 25th Street, Manhattan", "en_address": "49 West 25th Street, Manhattan", "lat": 40.7442, "lng": -73.991, "fr_dates": "10 janv. 1895", "en_dates": "Jan. 10, 1895", "fr_desc": "Dvořák et sa femme y assistent à une réception et un petit concert donné en leur honneur ; il y dirige le Largo de Haendel avec l'orchestre du Conservatoire. C'est la seule preuve directe d'une visite chez les Thurber, bien qu'il ait probablement dû y aller à d'autres occasions.", "en_desc": "Dvořák and his wife attend a reception and small concert held in their honor; he conducts Handel's Largo with the Conservatory orchestra. This is the only direct evidence of a visit to the Thurbers' home, though he was likely there on other occasions too."}, {"id": "bohemian-hall", "num": null, "cat": "social", "fr_name": "Bohemian National Hall", "en_name": "Bohemian National Hall", "fr_address": "321 East 73rd Street, Manhattan", "en_address": "321 East 73rd Street, Manhattan", "lat": 40.7716, "lng": -73.954, "fr_dates": "1892–1895 (bâtiment achevé en 1896)", "en_dates": "1892–1895 (building completed 1896)", "fr_desc": "Pendant que le bâtiment est en construction, Dvořák donne des concerts pour aider à financer ce lieu de rassemblement de la communauté tchèque et slovaque de New York. Une salle lui sera plus tard dédiée dans ce même bâtiment.", "en_desc": "While the building is under construction, Dvořák gives concerts to help fund this gathering place for New York's Czech and Slovak community. A memorial room would later be dedicated to him in this same building."}, {"id": "tannersville", "num": null, "cat": "distant", "fr_name": "Maison des Thurber, Catskills", "en_name": "The Thurbers' country house, Catskills", "fr_address": "Près de Tannersville, New York (env. 160 km au nord de Manhattan)", "en_address": "Near Tannersville, New York (ca. 160 km / 100 mi north of Manhattan)", "lat": 40.1748, "lng": -74.1332, "fr_dates": "avant le 16 janv. 1893", "en_dates": "before Jan. 16, 1893", "fr_desc": "Visite à la maison de campagne de Jeannette et Francis Thurber dans les montagnes Catskill. Lieu hors de l'agglomération new-yorkaise proprement dite, inclus ici à titre indicatif.", "en_desc": "A visit to the country home of Jeannette and Francis Thurber in the Catskill Mountains. Outside the New York City area proper, included here for reference."}], "catLabels": {"travel": {"fr": "Arrivées, départs et voyages", "en": "Arrivals, departures & travel"}, "residence": {"fr": "Résidence et voisinage", "en": "Residence & neighborhood"}, "concert": {"fr": "Concerts et représentations", "en": "Concerts & performances"}, "leisure": {"fr": "Loisirs et flâneries", "en": "Leisure & wandering"}, "social": {"fr": "Rencontres et vie sociale", "en": "Encounters & social life"}, "distant": {"fr": "Hors de New York", "en": "Outside New York"}}, "catColors": {"travel": "#0ea5e9", "residence": "#dc2626", "concert": "#7c3aed", "leisure": "#16a34a", "social": "#d97706", "distant": "#6b7280"}, "ui": {"title": {"fr": "Dvořák à New York", "en": "Dvořák in New York"}, "subtitle": {"fr": "Lieux fréquentés par Antonín Dvořák à New York et ses environs, 1892–1895", "en": "Places Antonín Dvořák frequented in New York and vicinity, 1892–1895"}, "mobileToggle": {"fr": "☰ Lieux", "en": "☰ Places"}}};
+const places = DATA.places;
+const catLabels = DATA.catLabels;
+const catColors = DATA.catColors;
+const UI = DATA.ui;
+let lang = 'fr';
+
+const map = L.map('map', {zoomControl:true}).setView([40.745,-73.985], 12);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19,
+  attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom'
+}).addTo(map);
+
+function makeIcon(place){
+  const color = catColors[place.cat] || '#555';
+  if(place.num){
+    return L.divIcon({
+      className:'',
+      html:`<div class="num-icon" style="background:${color}">${place.num}</div>`,
+      iconSize:[24,24],
+      iconAnchor:[12,12],
+      popupAnchor:[0,-12]
+    });
+  }
+  return L.divIcon({
+    className:'',
+    html:`<div class="dot-icon" style="background:${color}"></div>`,
+    iconSize:[14,14],
+    iconAnchor:[7,7],
+    popupAnchor:[0,-7]
+  });
+}
+
+function popupHtml(p){
+  return `
+    <div class="popup-title">${p.num ? p.num+'. ' : ''}${p[lang+'_name']}</div>
+    <p class="popup-addr">${p[lang+'_address']}</p>
+    <div class="popup-date">${p[lang+'_dates']}</div>
+    <p class="popup-desc">${p[lang+'_desc']}</p>
+  `;
+}
+
+const markers = {};
+const bounds = [];
+const coreCats = new Set(['travel','residence','concert','leisure','social']); // exclude 'distant' from initial fit
+
+places.forEach(p=>{
+  const marker = L.marker([p.lat,p.lng], {icon: makeIcon(p)});
+  marker.bindPopup(popupHtml(p), {maxWidth:280});
+  marker.addTo(map);
+  markers[p.id] = marker;
+  if(coreCats.has(p.cat)) bounds.push([p.lat,p.lng]);
+});
+if(bounds.length){ map.fitBounds(bounds, {padding:[28,28]}); }
+
+// --- Sidebar list ---
+const listEl = document.getElementById('list');
+const activeCats = new Set(Object.keys(catLabels));
+
+function renderList(){
+  listEl.innerHTML = '';
+  places.forEach((p)=>{
+    if(!activeCats.has(p.cat)) return;
+    const item = document.createElement('div');
+    item.className = 'place-item';
+    item.dataset.id = p.id;
+    const color = catColors[p.cat];
+    item.innerHTML = `
+      <div class="pi-top">
+        ${p.num ? `<div class="pi-num" style="background:${color}">${p.num}</div>` : `<div class="pi-dot" style="background:${color}"></div>`}
+        <div class="pi-name">${p[lang+'_name']}</div>
+      </div>
+      <div class="pi-date">${p[lang+'_dates']}</div>
+    `;
+    item.addEventListener('click', ()=>{
+      map.flyTo([p.lat,p.lng], 15, {duration:0.6});
+      markers[p.id].openPopup();
+      document.querySelectorAll('.place-item').forEach(el=>el.classList.remove('active'));
+      item.classList.add('active');
+      if(window.innerWidth <= 720){ document.getElementById('sidebar').classList.remove('open'); }
+    });
+    listEl.appendChild(item);
+  });
+}
+renderList();
+
+// --- Category filter chips ---
+const chipRow = document.getElementById('chipRow');
+const chipEls = {};
+Object.keys(catLabels).forEach(cat=>{
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'chip';
+  chip.innerHTML = `<span class="dot" style="background:${catColors[cat]}"></span><span class="chip-label">${catLabels[cat][lang]}</span>`;
+  chip.addEventListener('click', ()=>{
+    if(activeCats.has(cat)){ activeCats.delete(cat); chip.classList.add('off'); }
+    else { activeCats.add(cat); chip.classList.remove('off'); }
+    places.forEach(p=>{
+      if(markers[p.id]){
+        if(activeCats.has(p.cat)){ if(!map.hasLayer(markers[p.id])) markers[p.id].addTo(map); }
+        else { if(map.hasLayer(markers[p.id])) map.removeLayer(markers[p.id]); }
+      }
+    });
+    renderList();
+  });
+  chipRow.appendChild(chip);
+  chipEls[cat] = chip;
+});
+
+// --- Language switching ---
+function applyLanguage(){
+  document.getElementById('pageTitle').textContent = UI.title[lang];
+  document.getElementById('pageSubtitle').textContent = UI.subtitle[lang];
+  document.getElementById('mobileToggle').textContent = UI.mobileToggle[lang];
+  document.documentElement.lang = lang;
+  Object.keys(catLabels).forEach(cat=>{
+    chipEls[cat].querySelector('.chip-label').textContent = catLabels[cat][lang];
+  });
+  places.forEach(p=>{
+    markers[p.id].setPopupContent(popupHtml(p));
+  });
+  renderList();
+  document.querySelectorAll('.lang-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.lang === lang);
+  });
+}
+document.querySelectorAll('.lang-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(btn.dataset.lang === lang) return;
+    lang = btn.dataset.lang;
+    applyLanguage();
+  });
+});
+
+// --- Mobile sidebar toggle ---
+document.getElementById('mobileToggle').addEventListener('click', ()=>{
+  document.getElementById('sidebar').classList.toggle('open');
+});
+</script>
+</body>
+</html>
